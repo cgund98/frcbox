@@ -74,7 +74,7 @@ def detect_image(image_path, sess, detection_graph):
 
   #cv2.imwrite(output, cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
   cv2.imshow('img', cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
-  cv2.waitKey(1)
+  cv2.waitKey(0)
 
 def detect_image_webcam(image, sess, detection_graph):
   # Format data
@@ -132,20 +132,22 @@ def detect_image_coords(image_path, sess, detection_graph):
             #Detect objects
             coords = detect_objects_coords(image_np, sess, detection_graph)
             return coords
-
+import sys
 # Detect images
 if __name__ == '__main__':
 	# For reading from image files
-	input_dir = '../frcbox_test_video/images/'
+	#input_dir = '../frcbox_test_video/images/'
+	input_dir = '../frcbox_test_images/images/'
 	image_paths = sorted([ input_dir + f for f in os.listdir(input_dir)])
 
+	inp = sys.argv[1]
 	# Start Session
 	with detection_graph.as_default():
 		sess = tf.Session(graph=detection_graph)
 	
 	# Test Coord output
-	print(detect_image_coords(image_paths[5], sess, detection_graph))
-
+	#print(detect_image_coords(image_paths[5], sess, detection_graph))
+	detect_image(inp, sess, detection_graph)
 	# Loop through images and detect boxes (for image files)
 	#for i in range(0, len(image_paths)):
 	#	detect_image(image_paths[i], sess, detection_graph)
@@ -154,7 +156,7 @@ if __name__ == '__main__':
 	#cam = cv2.VideoCapture(0)
 	#while True:
 	#	frame = cam.read()
-	#	frame_np = detect_image_webcam(frame, sess, detection_graph)
+	#frame_np = detect_image_webcam(frame, sess, detection_graph)
 	#	
 	#	if cv2.waitKey(1) & 0xFF == ord('q'):
 	#		break
