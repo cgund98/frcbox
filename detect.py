@@ -89,6 +89,50 @@ def detect_image_webcam(image, sess, detection_graph):
   cv2.waitKey(1)
   return image_np
 
+def detect_objects_coords(image_np, sess, detection_graph):
+    # Define input
+    image_np_expanded = np.expand_dims(image_np, axis=0)
+    image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
+    
+    # Define outputs
+    detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
+    detection_scores = detection_graph.get_tensor_by_name('detection_scores:0')
+    detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
+    num_detections = detection_graph.get_tensor_by_name('num_detections:0')
+    
+    options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+    run_metadata = tf.RunMetadata()
+    
+    # Predict
+    (boxes, scores, classes, num) = sess.run(
+        [detection_boxes, detection_scores, detection_classes, num_detections],
+        feed_dict={image_tensor: image_np_expanded})
+    
+    # Find box vertices
+    box = boxes[0][0]
+    rows = image_np.shape[0]
+    cols = image_np.shape[1]
+    box[0] = box[0]*rows
+    box[1] = box[1]*cols
+    box[2] = box[2]*rows
+    box[3] = box[3]*cols
+    #cv2.rectangle(image_np, (box[1], box[0]), (box[3], box[2]), (0,255,0),3)
+    #cv2.imshow('img', cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
+    #cv2.waitKey(0)
+    
+    # Returns coords of box in [y1, x1, y2, x2] format
+    return box
+    
+
+def detect_image_coords(image_path, sess, detection_graph):
+            #Import image
+            image = cv2.imread(image_path)
+            image = cv2.resize(image, (480, 640))
+            image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            #Detect objects
+            coords = detect_objects_coords(image_np, sess, detection_graph)
+            return coords
+
 # Detect images
 if __name__ == '__main__':
 	# For reading from image files
@@ -98,10 +142,13 @@ if __name__ == '__main__':
 	# Start Session
 	with detection_graph.as_default():
 		sess = tf.Session(graph=detection_graph)
+	
+	# Test Coord output
+	print(detect_image_coords(image_paths[5], sess, detection_graph))
 
 	# Loop through images and detect boxes (for image files)
-	for i in range(0, len(image_paths)):
-		detect_image(image_paths[i], sess, detection_graph)
+	#for i in range(0, len(image_paths)):
+	#	detect_image(image_paths[i], sess, detection_graph)
 	
 	# Loop through webcam frames	
 	#cam = cv2.VideoCapture(0)
@@ -111,5 +158,4 @@ if __name__ == '__main__':
 	#	
 	#	if cv2.waitKey(1) & 0xFF == ord('q'):
 	#		break
-	
-	
+		
