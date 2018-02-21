@@ -66,7 +66,7 @@ def detect_objects(image_np, sess, detection_graph):
 def detect_image(image_path, sess, detection_graph):
   #Import image
   image = cv2.imread(image_path)
-  image = cv2.resize(image, (480, 640))
+  image = cv2.resize(image, (1080, 1920))
   image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
   
   #Detect objects
@@ -137,8 +137,8 @@ import sys
 if __name__ == '__main__':
 	# For reading from image files
 	#input_dir = '../frcbox_test_video/images/'
-	input_dir = '../frcbox_test_images/images/'
-	image_paths = sorted([ input_dir + f for f in os.listdir(input_dir)])
+	#input_dir = '../frcbox_test_images/images/'
+	#image_paths = sorted([ input_dir + f for f in os.listdir(input_dir)])
 
 	inp = sys.argv[1]
 	# Start Session
