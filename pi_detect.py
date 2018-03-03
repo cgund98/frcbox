@@ -3,7 +3,17 @@ import os
 import tensorflow as tf
 import cv2
 from picamera.array import PiRGBArray
+from picamera.array import PiRGBAnalysis
 from picamera import PiCamera
+import sys
+import time
+
+# Import Gambezi (Our smart dashboard equivalent)
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+from gambezi_python import Gambezi
+
+width = 240
+height = 320
 
 # Import utilities
 from object_detection.utils import label_map_util
@@ -68,7 +78,7 @@ def detect_objects(image_np, sess, detection_graph):
 def detect_image(image_path, sess, detection_graph):
   #Import image
   image = cv2.imread(image_path)
-  image = cv2.resize(image, (480, 640))
+  image = cv2.resize(image, (width, height))
   image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
   
   #Detect objects
@@ -80,7 +90,7 @@ def detect_image(image_path, sess, detection_graph):
 
 def detect_image_webcam(image, sess, detection_graph):
   # Format data
-  image = cv2.resize(image, (480, 640))
+  image = cv2.resize(image, (width, height))
   image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
   
   # Detect objects
@@ -112,20 +122,26 @@ def detect_objects_coords(image_np, sess, detection_graph):
     # Find box vertices
     box_coords = []
     for i in range(0, len(scores[0])):
-        if scores[0][0] <= .84:
-            return "Nothing here"
         if scores[0][i] > .84:
             box = boxes[0][i]
             rows = image_np.shape[0]
             cols = image_np.shape[1]
-            box[0] = box[0]*rows
-            box[1] = box[1]*cols
-            box[2] = box[2]*rows
-            box[3] = box[3]*cols
+            box[0] = box[0]
+            box[1] = box[1]
+            box[2] = box[2]
+            box[3] = box[3]
+            #box[0] = box[0]*rows
+            #box[1] = box[1]*cols
+            #box[2] = box[2]*rows
+            #box[3] = box[3]*cols
+ 
             box_coords.append(box)
             #cv2.rectangle(image_np, (box[1], box[0]), (box[3], box[2]), (0,255,0),3)
-        else:
-            break
+    #cv2.line(img, (0, 242), (height, 242), (255,0,0), thickness=3)
+    #cv2.line(img, (0, 300), (height, 300), (255,0,0), thickness=3)
+    #cv2.line(image_np, (242, 0), (242, height), (255,0,0), thickness=3)
+    #cv2.line(image_np, (300, 0), (300, height), (255,0,0), thickness=3)
+    
     #cv2.imshow('img', cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
     #cv2.waitKey(1)
     
@@ -136,50 +152,113 @@ def detect_objects_coords(image_np, sess, detection_graph):
 def detect_image_coords(image_path, sess, detection_graph):
             #Import image
             image = cv2.imread(image_path)
-            image = cv2.resize(image, (480, 640))
+            image = cv2.resize(image, (width, height))
             image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             #Detect objects
             coords = detect_objects_coords(image_np, sess, detection_graph)
             return coords
 import sys
+
+################################################################################
+# PiCamera to Gambezi adapter
+class GambeziOutput(object):
+
+    ############################################################
+    def __init__(self, gn_stream, gn_stream_fps):
+        self.gn_stream = gn_stream
+        self.gn_stream_fps = gn_stream_fps
+        self.old_time = time.time()
+        self.period = 1/30
+
+    ############################################################
+    def write(self, b):
+        # Measure FPS
+        new_time = time.time()
+        period = new_time - self.old_time
+        self.old_time = new_time
+        self.period = 0.99 * self.period + (1 - 0.99) * period
+        # Write to gambezi
+        self.gn_stream.set_data(b, 0, len(b))
+        self.gn_stream_fps.set_double(1/self.period)
+
+    ############################################################
+    def flush(self):
+        pass
+
+################################################################################
+# PiCamera RGB Analysis adapter
+class RGBAnalysis(PiRGBAnalysis):
+
+    ############################################################
+    def __init__(self, camera, gn_count, gn_x1, gn_y1, gn_x2, gn_y2):
+        super(RGBAnalysis, self).__init__(camera)
+        self.gn_count = gn_count
+        self.gn_x1 = gn_x1
+        self.gn_y1 = gn_y1
+        self.gn_x2 = gn_x2
+        self.gn_y2 = gn_y2
+        self.counter = 0
+
+    ############################################################
+    def analyse(self, image):
+        # Refresh view 1 times/s
+        self.counter += 1
+        if self.counter >= 30 / 30:
+            self.counter = 0
+            interval = True
+        else:
+            interval = False
+
+        if interval:
+            image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            #Detect objects
+            coords = detect_objects_coords(image_np, sess, detection_graph)
+            print(coords)
+            gn_count.set_double(len(coords))
+            for i in range(0, len(coords)):
+                gn_x1.get_node(str(i)).set_double(float(coords[i][0]))
+                gn_y1.get_node(str(i)).set_double(float(coords[i][1]))
+                gn_x2.get_node(str(i)).set_double(float(coords[i][2]))
+                gn_y2.get_node(str(i)).set_double(float(coords[i][3]))
+
 # Detect images
 if (__name__ == '__main__'):
-    # For reading from image files
-    #input_dir = '../frcbox_test_video/images/'
-    #input_dir = '../test_images/'
-    #image_paths = sorted([ input_dir + f for f in os.listdir(input_dir)])
-
-    #inp = sys.argv[1]
     # Start Session
     with detection_graph.as_default():
-    	sess = tf.Session(graph=detection_graph)
+    	sess = tf.Session(graph=detection_graph, config=tf.ConfigProto(intra_op_parallelism_threads=8))
     
-    # Test Coord output
-    #print(detect_image_coords(image_paths[5], sess, detection_graph))
-    #detect_image_coords(inp, sess, detection_graph)
-    # Loop through images and detect boxes (for image files)
-    #for i in range(0, len(image_paths)):
-    #	detect_image(image_paths[i], sess, detection_graph)
-    
+    # Initialize Gambezi
+    gambezi = Gambezi('10.17.47.2:5809', True)
+    gn_count = gambezi.get_node('pi_vision/count')
+    gn_x1 = gambezi.get_node('pi_vision/x1')
+    gn_y1 = gambezi.get_node('pi_vision/y1')
+    gn_x2 = gambezi.get_node('pi_vision/x2')
+    gn_y2 = gambezi.get_node('pi_vision/y2')
+
+    # Initialize local Gambezi
+    gambezi2 = Gambezi('localhost:5809', True)
+    gambezi2.get_node('pi_vision/width').set_double(width)
+    gambezi2.get_node('pi_vision/height').set_double(height)
+    gn_stream = gambezi2.get_node('pi_vision/stream')
+    gn_stream_fps = gambezi2.get_node('pi_vision/framerate')
+
     # Loop through webcam frames
     cam = PiCamera()
-    cap = PiRGBArray(cam)
-    while(True):
-        cam.capture(cap, format="bgr")
-        image= cap.array
+    cam.awb_mode = 'off'
+    cam.awb_gains = (1.15, 2.46)
+    cam.exposure_mode = 'auto'
+    cam.framerate = 30
+    cam.rotation = 270
+    cam.shutter_speed = 10000
+    cam.resolution = (width, height)
+    time.sleep(1)
+        
+    ################################################################################
+    print('Starting stream')
+    gambezi_output = GambeziOutput(gn_stream, gn_stream_fps)
+    cam.start_recording(gambezi_output, format='h264', splitter_port=1, profile="baseline", level='4', bitrate=1000000, quality=30)
 
-        image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        #Detect objects
-        coords = detect_objects_coords(image_np, sess, detection_graph)
-        print(coords)
-        #cv2.imshow('img',image)
-        #key = cv2.waitKey(1) & 0xFF
-        cap.truncate(0)
-
-        #if key == ord("q"):
-        #    break
-    #frame_np = detect_image_webcam(frame, sess, detection_graph)
-    #	
-    #	if cv2.waitKey(1) & 0xFF == ord('q'):
-    #		break
-		
+    ################################################################################
+    print('Starting vision processing')
+    analysis_output = RGBAnalysis(cam, gn_count, gn_x1, gn_y1, gn_x2, gn_y2)
+    cam.start_recording(analysis_output, 'bgr', splitter_port=2)
