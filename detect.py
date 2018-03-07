@@ -107,27 +107,40 @@ def detect_objects_coords(image_np, sess, detection_graph):
     (boxes, scores, classes, num) = sess.run(
         [detection_boxes, detection_scores, detection_classes, num_detections],
         feed_dict={image_tensor: image_np_expanded})
-    
     # Find box vertices
-    box = boxes[0][0]
-    rows = image_np.shape[0]
-    cols = image_np.shape[1]
-    box[0] = box[0]*rows
-    box[1] = box[1]*cols
-    box[2] = box[2]*rows
-    box[3] = box[3]*cols
-    #cv2.rectangle(image_np, (box[1], box[0]), (box[3], box[2]), (0,255,0),3)
-    #cv2.imshow('img', cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
-    #cv2.waitKey(0)
+    box_coords = []
+    print(scores[0][:4])
+    for i in range(0, len(scores[0])):
+        if scores[0][i] > .4:
+            box = boxes[0][i]
+            rows = image_np.shape[0]
+            cols = image_np.shape[1]
+            #box[0] = box[0]
+            #box[1] = box[1]
+            #box[2] = box[2]
+            #box[3] = box[3]
+            box[0] = box[0]*rows
+            box[1] = box[1]*cols
+            box[2] = box[2]*rows
+            box[3] = box[3]*cols
+            box_coords.append(box)
+            cv2.rectangle(image_np, (box[1], box[0]), (box[3], box[2]), (0,255,0),3)
+    #cv2.line(img, (0, 242), (height, 242), (255,0,0), thickness=3)
+    #cv2.line(img, (0, 300), (height, 300), (255,0,0), thickness=3)
+    #cv2.line(image_np, (242, 0), (242, height), (255,0,0), thickness=3)
+    #cv2.line(image_np, (300, 0), (300, height), (255,0,0), thickness=3)
+    
+    cv2.imshow('img', cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
+    cv2.waitKey(0)
     
     # Returns coords of box in [y1, x1, y2, x2] format
-    return box
+    return box_coords
     
 
 def detect_image_coords(image_path, sess, detection_graph):
             #Import image
             image = cv2.imread(image_path)
-            image = cv2.resize(image, (480, 640))
+            image = cv2.resize(image, (960, 1280))
             image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             #Detect objects
             coords = detect_objects_coords(image_np, sess, detection_graph)
@@ -147,7 +160,7 @@ if __name__ == '__main__':
 	
 	# Test Coord output
 	#print(detect_image_coords(image_paths[5], sess, detection_graph))
-	detect_image(inp, sess, detection_graph)
+	coords = detect_image_coords(inp, sess, detection_graph)
 	# Loop through images and detect boxes (for image files)
 	#for i in range(0, len(image_paths)):
 	#	detect_image(image_paths[i], sess, detection_graph)
