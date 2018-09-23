@@ -2,6 +2,8 @@ import numpy as np
 import os
 import tensorflow as tf
 import cv2
+from imutils.video import FPS
+import sys
 
 # Import utilities
 from object_detection.utils import label_map_util
@@ -32,62 +34,7 @@ def load_image_into_numpy_array(image):
   return np.array(image.getdata()).reshape(
       (im_height, im_width, 3)).astype(np.uint8)
 
-
 # Define function for detecting objects within an image
-def detect_objects(image_np, sess, detection_graph):
-  #Define input
-  image_np_expanded = np.expand_dims(image_np, axis=0)
-  image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
-  
-  #Define outputs
-  detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
-  detection_scores = detection_graph.get_tensor_by_name('detection_scores:0')
-  detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
-  num_detections = detection_graph.get_tensor_by_name('num_detections:0')
-  
-  options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-  run_metadata = tf.RunMetadata()
-  
-  #Predict
-  (boxes, scores, classes, num) = sess.run(
-    [detection_boxes, detection_scores, detection_classes, num_detections],
-    feed_dict={image_tensor: image_np_expanded})
-  
-  #Visualize
-  vis_util.visualize_boxes_and_labels_on_image_array(
-  image_np, np.squeeze(boxes), np.squeeze(classes).astype(np.int32),
-  np.squeeze(scores), category_index, use_normalized_coordinates=True,
-  min_score_thresh=.9,
-  line_thickness=4)
-  
-  return image_np
-  
-# Define function for handling images
-def detect_image(image_path, sess, detection_graph):
-  #Import image
-  image = cv2.imread(image_path)
-  image = cv2.resize(image, (1080, 1920))
-  image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-  
-  #Detect objects
-  image_np = detect_objects(image_np, sess, detection_graph)
-
-  #cv2.imwrite(output, cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
-  cv2.imshow('img', cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
-  cv2.waitKey(0)
-
-def detect_image_webcam(image, sess, detection_graph):
-  # Format data
-  image = cv2.resize(image, (480, 640))
-  image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-  
-  # Detect objects
-  image_np = detect_objects(image_np, sess, detection_graph)
-
-  #cv2.imwrite(output, cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
-  cv2.imshow('img', cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
-  cv2.waitKey(1)
-  return image_np
 
 def detect_objects_coords(image_np, sess, detection_graph):
     # Define input
@@ -109,7 +56,7 @@ def detect_objects_coords(image_np, sess, detection_graph):
         feed_dict={image_tensor: image_np_expanded})
     # Find box vertices
     box_coords = []
-    print(scores[0][:4])
+    #print(scores[0][:4])
     for i in range(0, len(scores[0])):
         if scores[0][i] > .4:
             box = boxes[0][i]
@@ -124,53 +71,114 @@ def detect_objects_coords(image_np, sess, detection_graph):
             box[2] = box[2]*rows
             box[3] = box[3]*cols
             box_coords.append(box)
-            cv2.rectangle(image_np, (box[1], box[0]), (box[3], box[2]), (0,255,0),3)
     #cv2.line(img, (0, 242), (height, 242), (255,0,0), thickness=3)
     #cv2.line(img, (0, 300), (height, 300), (255,0,0), thickness=3)
     #cv2.line(image_np, (242, 0), (242, height), (255,0,0), thickness=3)
     #cv2.line(image_np, (300, 0), (300, height), (255,0,0), thickness=3)
     
-    cv2.imshow('img', cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
-    cv2.waitKey(0)
     
     # Returns coords of box in [y1, x1, y2, x2] format
     return box_coords
     
 
-def detect_image_coords(image_path, sess, detection_graph):
-            #Import image
-            image = cv2.imread(image_path)
-            image = cv2.resize(image, (960, 1280))
-            image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            #Detect objects
-            coords = detect_objects_coords(image_np, sess, detection_graph)
-            return coords
-import sys
-# Detect images
-if __name__ == '__main__':
-	# For reading from image files
-	#input_dir = '../frcbox_test_video/images/'
-	#input_dir = '../frcbox_test_images/images/'
-	#image_paths = sorted([ input_dir + f for f in os.listdir(input_dir)])
+def detect_image(image_path, sess, detection_graph):
+    #Import image
+    image = cv2.imread(image_path)
+    image = cv2.resize(image, (960, 1280))
+    image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    #Detect objects
+    box_coords = detect_objects_coords(image_np, sess, detection_graph)
+    for box in box_coords:
+        cv2.rectangle(image_np, (box[1], box[0]), (box[3], box[2]), (0,255,0),3)
+    
+    print("Showing predictions...")
+    cv2.imshow('img', cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
+    cv2.waitKey(0)
+    
+    return box_coords
 
-	inp = sys.argv[1]
-	# Start Session
-	with detection_graph.as_default():
-		sess = tf.Session(graph=detection_graph)
-	
-	# Test Coord output
-	#print(detect_image_coords(image_paths[5], sess, detection_graph))
-	coords = detect_image_coords(inp, sess, detection_graph)
-	# Loop through images and detect boxes (for image files)
-	#for i in range(0, len(image_paths)):
-	#	detect_image(image_paths[i], sess, detection_graph)
-	
-	# Loop through webcam frames	
-	#cam = cv2.VideoCapture(0)
-	#while True:
-	#	frame = cam.read()
-	#frame_np = detect_image_webcam(frame, sess, detection_graph)
-	#	
-	#	if cv2.waitKey(1) & 0xFF == ord('q'):
-	#		break
-		
+# Detect objects in a video
+def detect_video(video_path, sess, detection_graph):
+    cap = cv2.VideoCapture(video_path)
+    width, height = cap.get(3), cap.get(4)
+    resize_factor = 1000 / width
+    #tracker = cv2.TrackerCSRT_create()
+    tracker = cv2.TrackerKCF_create()
+    b_box = None # Bounding box of biggest object
+    fps = FPS().start()
+    i = 0
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        image = frame
+        image = cv2.resize(image, (int(width * resize_factor), int(height * resize_factor)))
+        image_np = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        i += 1
+
+        #Detect objects
+        if b_box is None or i % 500 == 0: # Every 500 frames, use detection again
+            box_coords = detect_objects_coords(image_np, sess, detection_graph)
+            widths = [x[1]-x[0] for x in box_coords]
+            b_box = box_coords[widths.index(max(widths))]
+            #cv2.rectangle(image, (b_box[1], b_box[0]), (b_box[3], b_box[2]), (0,255,0),3)
+            b_box = (b_box[1], b_box[0], b_box[3]-b_box[1], b_box[2]-b_box[0]) # Change bounding box to (x, y, w, h) format
+            #b_box = cv2.selectROI("img", image, fromCenter=False, showCrosshair=True) # Manual bounding box
+            
+            tracker.init(image, b_box)
+    
+            #return
+            #for box in box_coords:
+            #    cv2.rectangle(image, (box[1], box[0]), (box[3], box[2]), (0,255,0),3)
+        else: # Detect objects with tracker, toggle comments to test fps with dl
+            (success, box) = tracker.update(image) # box in format [x, y, w, h]
+            #success = False
+
+            if success:
+                (x, y, w, h) = [int(x) for x in box]
+                cv2.rectangle(image, (x, y), (x+w, y+h), (0,255,0), 3)
+            
+            #box_coords = detect_objects_coords(image_np, sess, detection_graph)
+            #widths = [x[1]-x[0] for x in box_coords]
+            #b_box = box_coords[widths.index(max(widths))]
+            #cv2.rectangle(image, (b_box[1], b_box[0]), (b_box[3], b_box[2]), (0,255,0),3)
+
+            fps.update()
+            fps.stop()
+
+            cv2.putText(image, "FPS: {:.2f}".format(fps.fps()), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+        #print("Showing predictions...")
+        cv2.imshow('img', image)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+# Detect images
+def main():
+    # For reading from image files
+    #input_dir = '../frcbox_test_video/images/'
+    #input_dir = '../frcbox_test_images/images/'
+    #image_paths = sorted([ input_dir + f for f in os.listdir(input_dir)])
+
+    if len(sys.argv) == 1: print("No file given as argument."); return
+    inp = sys.argv[1]
+    img_file_types = ["png", "jpg"]
+    video_file_types = ["mov", "mp4"]
+
+    if inp[-3:] not in img_file_types and inp[-3:] not in video_file_types: print("File type not supported."); return
+
+    # Start Session
+    with detection_graph.as_default():
+    	sess = tf.Session(graph=detection_graph)
+    
+    # Test Coord output
+    #print(detect_image_coords(image_paths[5], sess, detection_graph))
+    if inp[-3:] in img_file_types: detect_image(inp, sess, detection_graph)
+    if inp[-3:] in video_file_types: detect_video(inp, sess, detection_graph)
+    
+
+if __name__ == '__main__':
+    main();	
